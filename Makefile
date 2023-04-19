@@ -1,7 +1,7 @@
-CFLAGS=-std=c12 -g -static
+CFLAGS=-std=c11 -g -static
 
-MyCC: main.c
-
+MyCC: main.o
+	$(CC) -o $@ $? $(LDFLAGS)
 test: MyCC
 	./test.sh
 
