@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 int BUFFER_SIZE = 1024 * 128;//128 Bytes
+char* src;
+char* old_src;
 
 // tokens and classes
 enum {
@@ -17,25 +19,19 @@ typedef struct Token Token;
 // the data of token
 struct Token {
   int class; 
-  Token* next;
   int val;        
 };
 
-Token* new_token(int class, int val) {
-  Token* tok = (Token*)calloc(1, sizeof(Token));
-  tok -> class = class;
-  tok -> next = NULL;
-  tok -> val = val;
-  return tok;
-}
-
 // The token stream
-Token* token_stream;
 Token* token;
 
+//Debug
+void printToken() {
+  printf("token -> class: %d\n", token -> class);
+  printf("token -> val: %d\n", token -> val);
+}
 
-
-
+//print the error
 void error(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -44,73 +40,83 @@ void error(char *fmt, ...) {
   exit(1);
 }
 
-void next() {
-  token = token -> next;
+//print the error with location
+void error_at(char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+
+  int pos = src - 1 - old_src;
+  fprintf(stderr, "%s\n", old_src);
+  fprintf(stderr, "%*s", pos, "");
+  fprintf(stderr, "^ ");
+  vfprintf(stderr, fmt, ap);
+  fprintf(stderr, "\n");
+  exit(1);
 }
+
+//get the next valid token from src
+void next() {
+  while(token -> val = *src) {
+    src++;
+    if(isspace(token -> val)) {
+      continue;
+    }
+    else if(isdigit(token -> val)) {
+      token -> class = NUM;
+      token -> val = strtol(src - 1, &src, 10);
+      return;
+    }
+    else if(token -> val == '+' || token -> val == '-') {
+      token -> class = RESERVED;
+      return;
+    }
+    else {
+      error_at("invalid token");
+    }
+  }
+  token -> class = EOF;
+}
+
 
 void match(int tk) {
   if(token -> class == tk) {
     next();
   }
   else {
-    error("expected token: %d\n", tk);
+    error_at("expected '%c'", tk);
   }
 }
 
-Token* tokenize(char *p) {
-  Token head;
-  head.val = 0;
-  head.next = NULL;
-  Token* cur = &head;
-
-  while(*p) {
-    if(isspace(*p)) {
-      p++;
-      continue;
-    }
-    else if(isdigit(*p)) {
-      cur -> next = new_token(NUM, strtol(p, &p, 10));
-    }
-    else if(*p == '+' || *p == '-') {
-      cur -> next = new_token(RESERVED, *p++);
-    }
-    else {
-      error("invalid token");
-    }
-    cur = cur -> next;
-  }
-
-  cur -> next = new_token(EOF, 0);
-  return head.next;
-}
 
 int main(int argc, char** argv) {
     if(argc != 2) {
         error("%s: invalid number of arguments", argv[0]);
         return 1;
     }
-    char* p = argv[1];
+    src = argv[1];
+    old_src = src;
     char* temp = (char*)calloc(BUFFER_SIZE, sizeof(char));
     char* targetCode = (char*)calloc(BUFFER_SIZE, sizeof(char));
+    token = (Token*)calloc(1, sizeof(Token));
     strcat(targetCode, ".global main\n");
     strcat(targetCode, "main:\n");
 
-    token_stream = tokenize(p);
-    token = token_stream;
+    next();
 
-    if(token -> class == NUM) {//the first number
+    //the first number
+    if(token -> class == NUM) {
       sprintf(temp, "%d", token -> val);
       strcat(targetCode, "  li a0,");strcat(targetCode, temp);strcat(targetCode, "\n");
-      match(NUM);//eat number
+      //eat the first number
+      match(NUM);
     }
     else {
       error("expected a number");
     }
-
-    while(token->class != EOF) {//left expression
+    //left expression
+    while(token -> class >= 0) {
         if(token->val == '+') {
           match(RESERVED);
-          
           sprintf(temp, "%d", token -> val);
           strcat(targetCode, "  addiw a0,a0,");strcat(targetCode, temp);strcat(targetCode, "\n");
         }
@@ -121,7 +127,7 @@ int main(int argc, char** argv) {
         }
         match(NUM);
     }
-
+    
     strcat(targetCode, "  ret\n");
     printf("%s", targetCode);
 }
