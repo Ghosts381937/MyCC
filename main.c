@@ -40,8 +40,13 @@ struct Node {
   int val;       // the value of NUM
 };
 
+// expr = mul ("+" mul | "-" mul)*
+// mul  = term ("*" term | "/" term)*
+// unary = ("+" | "-")? term
+// term = num | "(" expr ")"
 Node* expr();
 Node* mul();
+Node* unary();
 Node* term();
 
 Node* newNode(NodeType type, Node* l, Node *r, int val) {
@@ -67,6 +72,7 @@ void printAST(Node* node) {
     return;
   }
   // current node
+  printf("node: %p\n", node);
   printf("node -> type: %d\n", node -> type);
   printf("node -> l: %p\n", node -> l);
   printf("node -> r: %p\n", node -> r);
@@ -121,6 +127,7 @@ void next() {
     }
     else if(token -> val == '(' || token -> val == ')') {
       token -> class = token -> val;
+      return;
     }
     else {
       error_at("invalid token");
@@ -138,35 +145,7 @@ void match(int tk) {
     error_at("expected '%c'", tk);
   }
 }
-Node* term() {
-  Node* node;
-  if(token->val == '(') {
-    match('(');
-    node = expr();
-    match(')');
-  }
-  else if(token -> class == NUM) {
-    node = newNode(ND_NUM, NULL, NULL, token -> val);
-    match(NUM);
-  }
-  return node;
-}
-Node* mul() {
-  Node* node = term();
-  for(;;) {
-    if(token->val == '*') {
-      match(RESERVED);
-      node = newNode(ND_MUL, node, term(), 0);
-    }
-    else if(token->val == '/') {
-      match(RESERVED);
-      node = newNode(ND_DIV, node, term(), 0);
-    }
-    else {
-      return node;
-    }
-  }
-}
+
 Node* expr() {
   Node* node = mul();
   for(;;) {
@@ -183,6 +162,47 @@ Node* expr() {
     }
   }
 }
+Node* mul() {
+  Node* node = unary();
+  for(;;) {
+    if(token->val == '*') {
+      match(RESERVED);
+      node = newNode(ND_MUL, node, unary(), 0);
+    }
+    else if(token->val == '/') {
+      match(RESERVED);
+      node = newNode(ND_DIV, node, unary(), 0);
+    }
+    else {
+      return node;
+    }
+  }
+}
+Node* unary() {
+  int sign = 1;
+  if(token -> val == '+' || token -> val == '-') {
+    sign = 44 - token -> val;
+    match(RESERVED);
+  }
+  Node* node = term();
+  node -> val = sign * node -> val;
+  return node;
+}
+Node* term() {
+  Node* node;
+  if(token -> val == '(') {
+    match('(');
+    node = expr();
+    match(')');
+  }
+  else if(token -> class == NUM) {
+    node = newNode(ND_NUM, NULL, NULL, token -> val);
+    match(NUM);
+  }
+  return node;
+}
+
+
 
 void codeGen(Node* node) {
   if(node -> type == ND_NUM) {
