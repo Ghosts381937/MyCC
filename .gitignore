@@ -1,5 +1,6 @@
 
 *~
 *.o
+desktop.ini
 tmp*
 MyCC

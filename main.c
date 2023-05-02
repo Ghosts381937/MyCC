@@ -10,11 +10,14 @@
 char* src;
 char* old_src;
 char* targetCode;
-// class of tokens 
+// tokens and classes (operators last and in precedence order)
+// copied from c4
 enum {
-  RESERVED, 
-  NUM,
-}Class;
+  Num = 128, Fun, Sys, Glo, Loc, Id,
+  Char, Else, Enum, If, Int, Return, Sizeof, While,
+  Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Mod, Inc, Dec, Brak
+};
+
 
 typedef enum {
   ND_ADD,
@@ -29,8 +32,8 @@ typedef struct Node Node;
 
 // the data of token
 struct Token {
-  int class; 
-  int val;        
+  int class; //class of token
+  int val; //mainly for number     
 };
 
 struct Node {
@@ -117,15 +120,45 @@ void next() {
       continue;
     }
     else if(isdigit(token -> val)) {
-      token -> class = NUM;
+      token -> class = Num;
       token -> val = strtol(src - 1, &src, 10);
       return;
     }
-    else if(token -> val == '+' || token -> val == '-' || token -> val == '*' || token -> val == '/') {
-      token -> class = RESERVED;
+    else if(token -> val == '<') {
+      if(*src == '=') {
+        src++;
+        token -> class = Le;
+      }
+      else {
+        token -> class = Lt;
+      }
       return;
     }
-    else if(token -> val == '(' || token -> val == ')') {
+    else if(token -> val == '>') {
+      if(*src == '=') {
+        src++;
+        token -> class = Ge;
+      }
+      else {
+        token -> class = Gt;
+      }
+      return;
+    }
+    else if(token -> val == '=') {
+      if(*src == '=') {
+        src++;
+        token -> class == Eq;
+      }
+      return;
+    }
+    else if(token -> val == '!') {
+      if(*src == '=') {
+        src++;
+        token -> class == Ne;
+      }
+      return;
+    }
+    else if(token -> val == '+' || token -> val == '-' || token -> val == '*' || token -> val == '/' || token -> val == '(' || token -> val == ')') {
       token -> class = token -> val;
       return;
     }
@@ -150,11 +183,11 @@ Node* expr() {
   Node* node = mul();
   for(;;) {
     if(token->val == '+') {
-      match(RESERVED);
+      match('+');
       node = newNode(ND_ADD, node, mul(), 0);
     }
     else if(token->val == '-') {
-      match(RESERVED);
+      match('-');
       node = newNode(ND_SUB, node, mul(), 0);
     }
     else {
@@ -166,11 +199,11 @@ Node* mul() {
   Node* node = unary();
   for(;;) {
     if(token->val == '*') {
-      match(RESERVED);
+      match('*');
       node = newNode(ND_MUL, node, unary(), 0);
     }
     else if(token->val == '/') {
-      match(RESERVED);
+      match('/');
       node = newNode(ND_DIV, node, unary(), 0);
     }
     else {
@@ -179,10 +212,14 @@ Node* mul() {
   }
 }
 Node* unary() {
-  int sign = 1;
-  if(token -> val == '+' || token -> val == '-') {
-    sign = 44 - token -> val;
-    match(RESERVED);
+  int sign = 0;
+  if(token -> val == '+') {
+    sign = 1;
+    match('+');
+  }
+  else if(token -> val == '-') {
+    sign = -1;
+    match('-');
   }
   Node* node = term();
   node -> val = sign * node -> val;
@@ -195,9 +232,9 @@ Node* term() {
     node = expr();
     match(')');
   }
-  else if(token -> class == NUM) {
+  else if(token -> class == Num) {
     node = newNode(ND_NUM, NULL, NULL, token -> val);
-    match(NUM);
+    match(Num);
   }
   return node;
 }
