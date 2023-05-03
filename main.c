@@ -19,13 +19,6 @@ enum {
 };
 
 
-typedef enum {
-  ND_ADD,
-  ND_SUB,
-  ND_MUL,
-  ND_DIV,
-  ND_NUM,
-} NodeType;
 
 typedef struct Token Token;
 typedef struct Node Node;
@@ -37,24 +30,33 @@ struct Token {
 };
 
 struct Node {
-  NodeType type;
+  int class;
   Node *l;     // left
   Node *r;     // right
   int val;       // the value of NUM
 };
 
-// expr = mul ("+" mul | "-" mul)*
+
+
+// EBNF
+// expr = equality
+// equality = relational ("==" relational | "!=" relational)*
+// relational = add (">" add | ">=" add | "<" add | "<=" add)*
+// add = mul ("+" mul | "-" mul)* 
 // mul  = term ("*" term | "/" term)*
 // unary = ("+" | "-")? term
 // term = num | "(" expr ")"
 Node* expr();
+Node* equality();
+Node* relational();
+Node* add();
 Node* mul();
 Node* unary();
 Node* term();
 
-Node* newNode(NodeType type, Node* l, Node *r, int val) {
+Node* newNode(int class, Node* l, Node *r, int val) {
   Node* node = (Node*)calloc(1, sizeof(Node));
-  node -> type = type;
+  node -> class = class;
   node -> l = l;
   node -> r = r;
   node -> val = val;
@@ -76,7 +78,7 @@ void printAST(Node* node) {
   }
   // current node
   printf("node: %p\n", node);
-  printf("node -> type: %d\n", node -> type);
+  printf("node -> type: %d\n", node -> class);
   printf("node -> l: %p\n", node -> l);
   printf("node -> r: %p\n", node -> r);
   printf("node -> val: %d\n", node -> val);
@@ -115,6 +117,7 @@ void error_at(char *fmt, ...) {
 //get the next valid token from src
 void next() {
   while(token -> val = *src) {
+    //printToken();
     src++;
     if(isspace(token -> val)) {
       continue;
@@ -147,14 +150,14 @@ void next() {
     else if(token -> val == '=') {
       if(*src == '=') {
         src++;
-        token -> class == Eq;
+        token -> class = Eq;
       }
       return;
     }
     else if(token -> val == '!') {
       if(*src == '=') {
         src++;
-        token -> class == Ne;
+        token -> class = Ne;
       }
       return;
     }
@@ -180,15 +183,59 @@ void match(int tk) {
 }
 
 Node* expr() {
+  return equality();
+}
+Node* equality() {
+  Node* node = relational();
+  //printToken();
+  for(;;) {
+    if(token -> class == Eq) {
+      match(Eq);
+      node = newNode(Eq, node, relational(), 0);
+    }
+    else if(token -> class == Ne) {
+      match(Ne);
+      node = newNode(Ne, node, relational(), 0);
+    }
+    else {
+      return node;
+    }
+  }
+}
+Node* relational() {
+  Node* node = add();
+  for(;;) {
+    if(token -> class == Lt) {
+      match(Lt);
+      node = newNode(Lt, node, add(), 0);
+    }
+    else if(token -> class == Le) {
+      match(Le);
+      node = newNode(Le, node, add(), 0);
+    }
+    else if(token -> class == Gt) {
+      match(Gt);
+      node = newNode(Gt, node, add(), 0);
+    }
+    else if(token -> class == Ge) {
+      match(Ge);
+      node = newNode(Ge, node, add(), 0);
+    }
+    else {
+      return node;
+    }
+  }
+}
+Node* add() {
   Node* node = mul();
   for(;;) {
     if(token->val == '+') {
       match('+');
-      node = newNode(ND_ADD, node, mul(), 0);
+      node = newNode('+', node, mul(), 0);
     }
     else if(token->val == '-') {
       match('-');
-      node = newNode(ND_SUB, node, mul(), 0);
+      node = newNode('-', node, mul(), 0);
     }
     else {
       return node;
@@ -200,11 +247,11 @@ Node* mul() {
   for(;;) {
     if(token->val == '*') {
       match('*');
-      node = newNode(ND_MUL, node, unary(), 0);
+      node = newNode('*', node, unary(), 0);
     }
     else if(token->val == '/') {
       match('/');
-      node = newNode(ND_DIV, node, unary(), 0);
+      node = newNode('/', node, unary(), 0);
     }
     else {
       return node;
@@ -212,7 +259,7 @@ Node* mul() {
   }
 }
 Node* unary() {
-  int sign = 0;
+  int sign = 1;
   if(token -> val == '+') {
     sign = 1;
     match('+');
@@ -233,7 +280,7 @@ Node* term() {
     match(')');
   }
   else if(token -> class == Num) {
-    node = newNode(ND_NUM, NULL, NULL, token -> val);
+    node = newNode(Num, NULL, NULL, token -> val);
     match(Num);
   }
   return node;
@@ -242,7 +289,7 @@ Node* term() {
 
 
 void codeGen(Node* node) {
-  if(node -> type == ND_NUM) {
+  if(node -> class == Num) {
     printf("  li a0,%d\n", node -> val);
     printf(push);
     return;
@@ -251,18 +298,40 @@ void codeGen(Node* node) {
   codeGen(node -> r);
   printf(pop, "a1");
   printf(pop, "a0");
-  switch(node -> type) {
-    case ND_ADD:
+  switch(node -> class) {
+    case '+':
       printf("  add a0,a0,a1\n");
       break;
-    case ND_SUB:
+    case '-':
       printf("  sub a0,a0,a1\n");
       break;
-    case ND_MUL:
+    case '*':
       printf("  mul a0,a0,a1\n");
       break;
-    case ND_DIV:
+    case '/':
       printf("  div a0,a0,a1\n");
+      break;
+    case Eq:
+      printf("  sub a0,a0,a1\n");
+      printf("  seqz a0,a0\n");
+      break;
+    case Ne:
+      printf("  sub a0,a0,a1\n");
+      printf("  snez a0,a0\n");
+      break;
+    case Lt:
+      printf("  slt a0,a0,a1\n");
+      break;
+    case Le:
+      printf("  sgt a0,a0,a1\n");
+      printf("  xori a0,a0,1\n");
+      break;
+    case Gt:
+      printf("  sgt a0,a0,a1\n");
+      break;
+    case Ge:
+      printf("  slt a0,a0,a1\n");
+      printf("  xori a0,a0,1\n");
       break;
   }
   printf(push);
